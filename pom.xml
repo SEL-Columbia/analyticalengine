@@ -4,13 +4,11 @@
   <groupId>analyticalengine</groupId>
   <artifactId>analyticalengine</artifactId>
   <version>1.0-SNAPSHOT</version>
-
   <packaging>war</packaging>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
-
- <repositories>
+  <repositories>
     <repository>
       <id>central</id>
       <url>http://repo1.maven.org/maven2</url>
@@ -28,7 +26,6 @@
       <url>http://clojars.org/repo/</url>
     </repository>
   </repositories>
-
   <build>
     <sourceDirectory>src</sourceDirectory>
     <testSourceDirectory>test</testSourceDirectory>
@@ -58,6 +55,29 @@
         </executions>
       </plugin>
       <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.2</version>
+        <executions>
+          <execution>
+            <phase>compile</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>java</executable>
+              <arguments>
+                <argument>-Dclojure.compile.path=target/classes</argument>
+                <argument>-classpath</argument>
+                <classpath/>
+                <argument>clojure.lang.Compile</argument>
+                <argument>analyticalengine.servlet</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>      
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-war-plugin</artifactId>
         <version>2.0</version>
@@ -80,17 +100,38 @@
         <artifactId>maven-jetty-plugin</artifactId>
         <configuration>
           <contextPath>/</contextPath>
+          <webAppConfig>
+            <extraClasspath>src/main/clojure</extraClasspath>
+          </webAppConfig>
           <scanIntervalSeconds>2</scanIntervalSeconds>
+          <connectors>
+            <connector implementation="org.mortbay.jetty.nio.SelectChannelConnector">
+              <port>3000</port>
+              <maxIdleTime>60000</maxIdleTime>
+            </connector>
+          </connectors>
+          <scanTargetPatterns>
+            <scanTargetPattern>
+              <directory>src/main/clojure</directory>
+              <includes>
+                <include>**/*.clj</include>
+              </includes>
+            </scanTargetPattern>
+          </scanTargetPatterns>
         </configuration>
       </plugin>
     </plugins>
   </build>
-
   <dependencies>
     <dependency>
       <groupId>org.clojure</groupId>
       <artifactId>clojure</artifactId>
       <version>1.2.1</version>
+    </dependency>
+    <dependency>
+      <groupId>hiccup</groupId>
+      <artifactId>hiccup</artifactId>
+      <version>0.3.6</version>
     </dependency>
     <dependency>
       <groupId>org.clojure</groupId>
@@ -135,6 +176,10 @@
       <version>2.5</version>
       <scope>provided</scope>
     </dependency>
+    <dependency>
+      <groupId>geoscript</groupId>
+      <artifactId>geoscript</artifactId>
+      <version>1.0.0-SNAPSHOT</version>
+    </dependency>
   </dependencies>
-
 </project>
