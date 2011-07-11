@@ -1,6 +1,10 @@
 (ns analyticalengine.core
+  (:import [org.geoscript.geocss Translator CssParser]
+           [java.io ByteArrayInputStream])
+
   (:use [compojure.core :only (defroutes GET ANY)]
         [compojure.route :only (not-found)]
+        [geoscript io render]
         [ring.middleware.multipart-params :only (wrap-multipart-params)]
         [ring.adapter.jetty-servlet :only (run-jetty)]))
 
@@ -11,10 +15,11 @@
        (assoc request :session (.getSession servlet-request true))
        request))))
 
-(defn wrap-logging [handler]
-  (fn [request]
-    (println (keys request))
-    (handler request)))
+(defn make-css-style [string]
+  (.css2sld (Translator.)
+            (.get (CssParser/parse
+                   (ByteArrayInputStream. (.getBytes string))))))
+
 
 (defn index [request]
   (str request))
@@ -25,7 +30,6 @@
   (not-found "<h1>Page not found</h1>"))
 
 (def app (-> main-routes
-             wrap-logging
              wrap-servlet-session
              wrap-multipart-params))
 
