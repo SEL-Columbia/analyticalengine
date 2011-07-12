@@ -1,0 +1,13 @@
+@import "boilerplate.css";
+@import "plugins.css";
+
+/* -------------------------------------------------------------- 
+   SCREEN
+-------------------------------------------------------------- */
+
+/* Put your site styles here */
+
+#container { 
+    margin: 10px auto;
+    width: 1000px;
+} 
