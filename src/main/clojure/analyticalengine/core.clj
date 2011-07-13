@@ -11,6 +11,7 @@
             [hiccup.form-helpers :as fh])
   (:use [compojure.core :only (defroutes GET ANY)]
         [compojure.route :only (not-found files)]
+        [clojure.contrib.json :only (json-str)]
         [geoscript io render proj]
         [clojure.contrib.sql :as sql]
         [ring.middleware.multipart-params :only (wrap-multipart-params)]
@@ -34,7 +35,7 @@
    [:head
     [:title (or title "")]]
    (ph/include-css "/public/css/screen.css")
-   (ph/include-js "/public/js/jquery-1.5.1.min.js")
+   (ph/include-js "/public/js/jquery.min.js")
    header
    [:body
     [:div {:id :container}
@@ -49,30 +50,22 @@
         srs   (epsg->proj (get (:query-params request) "SRS" "EPSG:4326"))]
     (ReferencedEnvelope. minx maxx miny maxy srs)))
 
-;; (defn find-layers [name]
-;;   (let [[ds-name layer-name] (.split name ":")
-;;         datastore (get @catalog ds-name)]
-;;    (.getFeatureSource datastore layer-name)))
+(defn get-datastore [request]
+  (:datastore @(.state (:servlet request))))
 
-
-;; (defn find-style [name]
-;;   (if (= name "") nil
-;;       (make-css-style (slurp (get @styles name))))
-
-(defn find-layers [names])
-(defn find-styles [styles])
+(defn get-layer [request layer]
+  (println layer)
+  (.getFeatureSource (get-datastore request) layer))
 
 (defn wms-handler [request]
-  ""
   (let [params          (:query-params request)
-        layer           (find-layers (get params "LAYERS"))
+        layer           (get-layer request (get params "LAYERS"))
         output          (ByteArrayOutputStream.)
         exceptions      (:EXCEPTIONS params)
         width           (Integer/parseInt (get params "WIDTH" "100"))
         height          (Integer/parseInt (get params "HEIGHT" "100"))
         format          (get params "FORMAT" "image/png")
         service         (get params "SERVICE" "WMS")
-        style           (find-styles (get params "STYLES"))
         version         (get params "VERSION" "1.1.0")
         request-type    (get params "REQUEST" "GetMap")
         extent          (make-envelope request)
@@ -80,20 +73,44 @@
     (render layer
             output
             extent
-            :style style
+            :style nil
             :height height
             :width width)
      (ByteArrayInputStream. (.toByteArray output))))
 
 
 (defn index [request]
-  (let [datastore (:datastore @(.state (:servlet request)))]
+  (let [datastore (get-datastore request)]
     (page 
-     [:div [:ul (map (fn [name] [:li  name])
-                     (seq (.getTypeNames datastore)))]])))
+     [:div
+      [:ul
+       (map (fn [name]
+              [:li [:a {:href (str "/viewer/" name)} name]])
+            (.getTypeNames datastore))]])))
+
+(defn bbox->vec [bbox]
+  [(.getMinX bbox)
+   (.getMinY bbox)
+   (.getMaxX bbox)
+   (.getMaxY bbox)])
+
+(defn web-viewer [request]
+  (let [layer (get-layer request (:layer (:params request)))]
+    (page
+     [:div [:h3 "Layer viewer"] layer [:div {:id "maps"}]]
+     :header (list
+              (ph/include-js "/public/js/openlayers/OpenLayers.js")
+              (ph/include-js "/public/js/viewer.js")
+              (ph/javascript-tag (str "$(function(){
+                    loadPage({
+                      name:\""(.. layer (getName) (getLocalPart))"\",
+                      bounds:" (json-str (bbox->vec (.getBounds layer)))",
+                    });
+             })"))))))
 
 (defroutes main-routes
   (GET "/" [] index)
+  (GET "/viewer/:layer" [layer] web-viewer)
   (GET "/wms" [] wms-handler)
   (files "/public")
   (not-found "<h1>Page not found</h1>"))
