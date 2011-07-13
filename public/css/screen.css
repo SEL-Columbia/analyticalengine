@@ -11,3 +11,8 @@
     margin: 10px auto;
     width: 1000px;
 } 
+
+#maps { 
+    height: 300px;
+    width: 300px;
+} 
