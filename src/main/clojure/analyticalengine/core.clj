@@ -12,6 +12,7 @@
   (:use [compojure.core :only (defroutes GET ANY)]
         [compojure.route :only (not-found files)]
         [geoscript io render proj]
+        [clojure.contrib.sql :as sql]
         [ring.middleware.multipart-params :only (wrap-multipart-params)]
         [ring.adapter.jetty-servlet :only (run-jetty)]))
 
@@ -123,23 +124,26 @@
 
 
 (defn index [request]
-  (page
-   [:div [:h1 "Home page"]
-    [:ul 
-     [:li [:a {:href "/make-buffer"} "Buffer CSV file"]]
-     [:li [:a {:href "/make-distance"} "Distance"]]]]))
-
-(defn make-buffer [request]
-  (page [:div [:h2 "Buffer CSV file"]]))
+  (str request))
 
 (defroutes main-routes
   (GET "/" [] index)
-  (GET "/wms" [] wms-handler)    
-  (GET "/make-buffer" []  make-buffer)
+  (GET "/wms" [] wms-handler)
   (files "/public")
   (not-found "<h1>Page not found</h1>"))
 
+
+(defn wrap-prod-db-connection [handler]
+  (fn [request]
+    (if (-> request :uri (.startsWith "/public/"))
+      (handler request)
+      (sql/with-connection @(.state (:servlet request))
+        (handler request)))))
+
+
+
 (def app (-> main-routes
+             wrap-prod-db-connection
              wrap-servlet-session
              wrap-multipart-params))
 
