@@ -23,47 +23,6 @@
        (assoc request :session (.getSession servlet-request true))
        request))))
 
-(def catalog (ref {}))
-(def styles (ref {}))
-
-
-(defn load-datastore [ds-name ds-config]
-  (println (str "Loading datastore" ds-name " datastore"))
-  (dosync (alter catalog assoc
-                 (name ds-name)
-                 (data-store
-                  (.getString ds-config "connection")))))
-
-(defn load-style [style-name style-config]
-  (println (str "Loading style:" style-name ))
-  (dosync (alter styles assoc
-                 (name style-name) (.getString style-config "path"))))
-
-(defn load-section [section-name section]
-  (let [type (.getString section "type")]
-    (condp = type
-        "style" (load-style section-name section)
-        "datastore" (load-datastore section-name section))))
-
-(defn iter-sections [config]  
-  (let [sections (filter #(not= "application" %) (.getSections config))]
-    (doseq [section sections]
-      (load-section section (.getSection config section)))))
-
-(defn load-ini-file [path]
-  "Loads a ini file from the file system"
-  (let [config (HierarchicalINIConfiguration. path)]
-    config))
-
-(defn build-catalog []
-  (let [config (load-ini-file "catalog.ini")]
-    (println "Starting server")
-    (println "--------------------")
-    (iter-sections config)))
-
-(defn build-catalog []
-  (println "Loading catalog"))
-
 (defn make-css-style [string]
   (.css2sld (Translator.)
             (.get (CssParser/parse
@@ -90,14 +49,18 @@
         srs   (epsg->proj (get (:query-params request) "SRS" "EPSG:4326"))]
     (ReferencedEnvelope. minx maxx miny maxy srs)))
 
-(defn find-layers [name]
-  (let [[ds-name layer-name] (.split name ":")
-        datastore (get @catalog ds-name)]
-    (.getFeatureSource datastore layer-name)))
+;; (defn find-layers [name]
+;;   (let [[ds-name layer-name] (.split name ":")
+;;         datastore (get @catalog ds-name)]
+;;    (.getFeatureSource datastore layer-name)))
 
-(defn find-style [name]
-  (if (= name "") nil
-      (make-css-style (slurp (get @styles name)))))
+
+;; (defn find-style [name]
+;;   (if (= name "") nil
+;;       (make-css-style (slurp (get @styles name))))
+
+(defn find-layers [names])
+(defn find-styles [styles])
 
 (defn wms-handler [request]
   ""
@@ -109,7 +72,7 @@
         height          (Integer/parseInt (get params "HEIGHT" "100"))
         format          (get params "FORMAT" "image/png")
         service         (get params "SERVICE" "WMS")
-        style           (find-style (get params "STYLES"))
+        style           (find-styles (get params "STYLES"))
         version         (get params "VERSION" "1.1.0")
         request-type    (get params "REQUEST" "GetMap")
         extent          (make-envelope request)
@@ -124,7 +87,10 @@
 
 
 (defn index [request]
-  (str request))
+  (let [datastore (:datastore @(.state (:servlet request)))]
+    (page 
+     [:div [:ul (map (fn [name] [:li  name])
+                     (seq (.getTypeNames datastore)))]])))
 
 (defroutes main-routes
   (GET "/" [] index)
@@ -132,18 +98,21 @@
   (files "/public")
   (not-found "<h1>Page not found</h1>"))
 
+(defmacro with-datastore [store & body]
+  `(try
+    ~@body
+    (finally (.dispose ~store))))
 
-(defn wrap-prod-db-connection [handler]
+(defn wrap-db-connection [handler]
   (fn [request]
     (if (-> request :uri (.startsWith "/public/"))
       (handler request)
-      (sql/with-connection @(.state (:servlet request))
+      (with-datastore (:datastore @(.state (:servlet request)))
         (handler request)))))
 
 
 
 (def app (-> main-routes
-             wrap-prod-db-connection
              wrap-servlet-session
              wrap-multipart-params))
 
